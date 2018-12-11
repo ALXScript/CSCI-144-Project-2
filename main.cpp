@@ -2,17 +2,21 @@
 #include<thread>
 #include<chrono>
 #include<mutex>
+#include<condition_variable>
 #include<unistd.h>
 
 using namespace std;
 
 //make the MAX variable
-const int MAX = 20;
+//Buffer Sizes - 25, 50, 100
+const int MAX = 25;
 
 //****************CLASS DECLARATION****************
-class TSQueue {
+class BBQ {
 	//create sync variables
 	mutex mutexLock;
+	condition_variable itemAdded;
+	condition_variable itemRemoved; 
 
 	//create actual variables
 	int items[MAX];
@@ -20,50 +24,106 @@ class TSQueue {
 	int nextEmpty;
 
 public:
-	TSQueue();
-	~TSQueue();
-	bool tryInsert(int passItem);
-	bool tryRemove(int *passItem);
+	BBQ();
+	~BBQ();
+	bool insert(int passItem, thread::id passThreadID);
+	bool remove(int *passItem, thread::id passThreadID);
 };
 
-TSQueue::TSQueue() {
+//Constructor to set the front and next empty variables to 0
+BBQ::BBQ() {
 	front = 0;
 	nextEmpty = 0;
 }
 
-TSQueue::~TSQueue() {};
+//Destructor variable
+BBQ::~BBQ() {};
 
-bool TSQueue::tryInsert(int passItem) {
+//Wait until there is room and hten insert an item.
+// bool BBQ::insert(int passItem) {
+// 	bool success = false;
+
+// 	mutexLock.lock();
+// 	if ((nextEmpty - front) < MAX) {
+// 		items[nextEmpty % MAX] = passItem;
+// 		nextEmpty++;
+// 		success = true;
+// 	}
+// 	mutexLock.unlock();
+// 	return success;
+// };
+bool BBQ::insert(int passItem, thread::id passThreadID){
 	bool success = false;
 
-	mutexLock.lock();
-	if ((nextEmpty - front) < MAX) {
-		items[nextEmpty % MAX] = passItem;
-		nextEmpty++;
-		success = true;
-	}
-	mutexLock.unlock();
-	return success;
-};
+	//acquire the lock
+	//mutexLock.lock();
+	unique_lock<mutex> uLock(mutexLock);
 
-bool TSQueue::tryRemove(int *passItem) {
+	//while loop
+	while ((nextEmpty - front) == MAX){
+		itemRemoved.wait(uLock);
+		printf("\nWaiting to produce by thread number: %d\n", passThreadID);
+	}
+
+	//execute the insertion
+	items[nextEmpty % MAX] = passItem;
+	nextEmpty++;
+	success = true;
+	
+	//signal to the waiting thread
+	itemAdded.notify_one();
+
+	//release the lock
+	//mutexLock.unlock();
+	uLock.unlock();
+
+	return success;
+}
+
+// bool BBQ::remove(int *passItem) {
+// 	bool success = false;
+
+// 	mutexLock.lock();
+// 	if (front < nextEmpty) {
+// 		*passItem = items[front % MAX];
+// 		front++;
+// 		success = true;
+// 	}
+// 	mutexLock.unlock();
+
+// 	return success;
+// };
+bool BBQ::remove(int *passItem, thread::id passThreadID){
 	bool success = false;
 
-	mutexLock.lock();
-	if (front < nextEmpty) {
-		*passItem = items[front % MAX];
-		front++;
-		success = true;
+	//acquire the lock
+	unique_lock<mutex> uLock(mutexLock);
+
+	//while loop
+	while (front == nextEmpty){
+		itemAdded.wait(uLock);
+		printf("\nWaiting to consume by thread number: %d\n", passThreadID);
 	}
-	mutexLock.unlock();
+
+	//execute the insertion
+	*passItem = items[front % MAX];
+	front++;
+	success = true;
+	
+	//signal to the waiting thread
+	itemRemoved.notify_one();
+
+	//release the lock
+	//mutexLock.unlock();
+	uLock.unlock();
 
 	return success;
-};
+}
 //**********END CLASS DECLARATION********************
 
 
 //Funciton for producer threads to add an item to the queue
-void produceFunction(TSQueue *queue, int item, int tp) {
+void produceFunction(BBQ *queue, int item, int tp) {
 	this_thread::sleep_for(chrono::seconds(tp));
 
 	//anounce that the thread has been created
@@ -73,18 +133,17 @@ void produceFunction(TSQueue *queue, int item, int tp) {
 	thread::id threadID = this_thread::get_id();
 
 	//produce item and put it in the queue
-	if (queue->tryInsert(item)) {
-		printf("Item ID %d produced by thread number: %d\n", item, threadID);
+	if (queue->insert(item, threadID)) {
+		printf("\nItem ID %d produced by thread number: %d\n", item, threadID);
 	}
 
 	//this_thread::sleep_for(chrono::milliseconds(tp * 500));
 }
 
 //function for the consumer threads to remove an item from the queue
-void consumeFunction(TSQueue *queue, int item, int tc) {	
+void consumeFunction(BBQ *queue, int item, int tc) {	
 	this_thread::sleep_for(chrono::seconds(tc));
 
-	
 	//announce that the thread has been created
 	printf("\nConsumer thread created.\n");
 
@@ -92,8 +151,8 @@ void consumeFunction(TSQueue *queue, int item, int tc) {
 	thread::id threadID = this_thread::get_id();
 
 	//consume item from the queue
-	if (queue->tryRemove(&item)) {
-		printf("Item ID %d consumed by thread number: %d\n", item, threadID);
+	if (queue->remove(&item, threadID)) {
+		printf("\nItem ID %d consumed by thread number: %d\n", item, threadID);
 	};
 
 	//this_thread::sleep_for(chrono::milliseconds(tc * 500));
@@ -105,7 +164,9 @@ int main(int argc, char *argv[]) {
 	int tcRange = (*argv[2] - '0');
 
 	//create initial queue structure
-	TSQueue queue;
+	BBQ queue;
+
+	
 
 	//create sleeping interval
 	srand(time(NULL));
