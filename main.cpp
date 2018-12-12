@@ -3,7 +3,6 @@
 #include<chrono>
 #include<mutex>
 #include<condition_variable>
-#include<unistd.h>
 
 using namespace std;
 
@@ -69,6 +68,8 @@ bool BBQ::insert(int passItem, thread::id passThreadID){
 	items[nextEmpty % MAX] = passItem;
 	nextEmpty++;
 	success = true;
+
+	printf("\nItem ID %d produced by thread number: %d\n", passItem, passThreadID);
 	
 	//signal to the waiting thread
 	itemAdded.notify_one();
@@ -109,6 +110,8 @@ bool BBQ::remove(int *passItem, thread::id passThreadID){
 	*passItem = items[front % MAX];
 	front++;
 	success = true;
+
+	printf("\nItem ID %d consumed by thread number: %d\n", item, threadID);
 	
 	//signal to the waiting thread
 	itemRemoved.notify_one();
@@ -134,7 +137,7 @@ void produceFunction(BBQ *queue, int item, int tp) {
 
 	//produce item and put it in the queue
 	if (queue->insert(item, threadID)) {
-		printf("\nItem ID %d produced by thread number: %d\n", item, threadID);
+		//printf("\nItem ID %d produced by thread number: %d\n", item, threadID);
 	}
 
 	//this_thread::sleep_for(chrono::milliseconds(tp * 500));
@@ -152,7 +155,7 @@ void consumeFunction(BBQ *queue, int item, int tc) {
 
 	//consume item from the queue
 	if (queue->remove(&item, threadID)) {
-		printf("\nItem ID %d consumed by thread number: %d\n", item, threadID);
+		//printf("\nItem ID %d consumed by thread number: %d\n", item, threadID);
 	};
 
 	//this_thread::sleep_for(chrono::milliseconds(tc * 500));
