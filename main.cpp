@@ -6,6 +6,9 @@
 
 using namespace std;
 
+//more global variables
+int queueFullCounter = 0;
+
 //make the MAX variable
 //Buffer Sizes - 25, 50, 100
 const int MAX = 25;
@@ -39,18 +42,6 @@ BBQ::BBQ() {
 BBQ::~BBQ() {};
 
 //Wait until there is room and hten insert an item.
-// bool BBQ::insert(int passItem) {
-// 	bool success = false;
-
-// 	mutexLock.lock();
-// 	if ((nextEmpty - front) < MAX) {
-// 		items[nextEmpty % MAX] = passItem;
-// 		nextEmpty++;
-// 		success = true;
-// 	}
-// 	mutexLock.unlock();
-// 	return success;
-// };
 bool BBQ::insert(int passItem, thread::id passThreadID){
 	bool success = false;
 
@@ -69,7 +60,7 @@ bool BBQ::insert(int passItem, thread::id passThreadID){
 	nextEmpty++;
 	success = true;
 
-	printf("\nItem ID %d produced by thread number: %d\n", passItem, passThreadID);
+	//printf("\nItem ID %d produced by thread number: %d\n", passItem, passThreadID);
 	
 	//signal to the waiting thread
 	itemAdded.notify_one();
@@ -81,19 +72,6 @@ bool BBQ::insert(int passItem, thread::id passThreadID){
 	return success;
 }
 
-// bool BBQ::remove(int *passItem) {
-// 	bool success = false;
-
-// 	mutexLock.lock();
-// 	if (front < nextEmpty) {
-// 		*passItem = items[front % MAX];
-// 		front++;
-// 		success = true;
-// 	}
-// 	mutexLock.unlock();
-
-// 	return success;
-// };
 bool BBQ::remove(int *passItem, thread::id passThreadID){
 	bool success = false;
 
@@ -111,7 +89,7 @@ bool BBQ::remove(int *passItem, thread::id passThreadID){
 	front++;
 	success = true;
 
-	printf("\nItem ID %d consumed by thread number: %d\n", item, threadID);
+	//printf("\nItem ID %d consumed by thread number: %d\n", passItem, passThreadID);
 	
 	//signal to the waiting thread
 	itemRemoved.notify_one();
@@ -137,7 +115,7 @@ void produceFunction(BBQ *queue, int item, int tp) {
 
 	//produce item and put it in the queue
 	if (queue->insert(item, threadID)) {
-		//printf("\nItem ID %d produced by thread number: %d\n", item, threadID);
+		printf("\nItem ID %d produced by thread number: %d\n", item, threadID);
 	}
 
 	//this_thread::sleep_for(chrono::milliseconds(tp * 500));
@@ -155,7 +133,7 @@ void consumeFunction(BBQ *queue, int item, int tc) {
 
 	//consume item from the queue
 	if (queue->remove(&item, threadID)) {
-		//printf("\nItem ID %d consumed by thread number: %d\n", item, threadID);
+		printf("\nItem ID %d consumed by thread number: %d\n", item, threadID);
 	};
 
 	//this_thread::sleep_for(chrono::milliseconds(tc * 500));
@@ -168,8 +146,6 @@ int main(int argc, char *argv[]) {
 
 	//create initial queue structure
 	BBQ queue;
-
-	
 
 	//create sleeping interval
 	srand(time(NULL));
@@ -190,6 +166,9 @@ int main(int argc, char *argv[]) {
 
 	//create counter for item
 	int itemCounter = 0;
+
+	//create counter for how many times the queue was filled
+	int queueFullCounter = 0;
 
 	//program runs forever
 	while (1)
